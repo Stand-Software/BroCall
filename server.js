@@ -8,10 +8,9 @@ const app = express();
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
-const PORT = process.env.PORT || 1080;
+const PORT = process.env.PORT || 80;
 
 // Dicionário para gerenciar as salas e seus clientes
-// Agora, em vez de só o websocket, guardamos um objeto com o ws e o nickname
 const rooms = {};
 const clientToRoom = {};
 
@@ -121,5 +120,5 @@ wss.on('connection', ws => {
 });
 
 server.listen(PORT, () => {
-    console.log(`Servidor do BroCall rodando em http://localhost:${PORT}`);
+    console.log(`Servidor do BroCall rodando na porta: ${PORT}`);
 });
