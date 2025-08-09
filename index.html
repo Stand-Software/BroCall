@@ -245,7 +245,7 @@
     </div>
 
     <script>
-        const host = 'ws://0.0.0.0:80';
+        const host = window.location.protocol.replace('http', 'ws') + '//' + window.location.host;
         let ws;
         let localStream;
         let myId = null;
@@ -990,3 +990,4 @@
 </body>
 
 </html>
+
