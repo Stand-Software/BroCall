@@ -1,0 +1,991 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BroCall</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Estilos customizados que complementam o Tailwind */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap');
+        
+        body { 
+            font-family: 'Inter', sans-serif;
+        }
+
+        .video-container {
+            border-radius: 1rem;
+            overflow: hidden;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.7);
+            background-color: #0d0d0d;
+            border: 1px solid #333;
+            position: relative;
+            transition: all 0.3s ease-in-out;
+        }
+
+        .screen-share-container {
+            border-radius: 1rem;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.7);
+            background-color: #0d0d0d;
+            border: 2px solid #a200ff; /* Borda destacada */
+            position: relative;
+            transition: all 0.3s ease-in-out;
+        }
+
+        .placeholder-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #ccc;
+            font-size: 1.5rem;
+            font-weight: bold;
+        }
+        
+        .modal-container {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: #0d0d0d;
+            padding: 2rem;
+            border-radius: 1rem;
+            z-index: 100;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.7);
+            border: 1px solid #333;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        .screen-share-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.95);
+            z-index: 99;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .screen-share-modal-content {
+            position: relative;
+            max-width: 90%;
+            max-height: 90%;
+            border-radius: 1rem;
+            overflow: hidden;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.7);
+        }
+
+        .settings-dialog-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 99;
+        }
+
+        .button-active {
+            background-color: #a200ff !important;
+            color: white !important;
+            box-shadow: 0 4px 15px rgba(162, 0, 255, 0.4);
+        }
+
+        .video-element {
+            object-fit: cover;
+            width: 100%;
+            height: 100%;
+        }
+
+        .video-label {
+            position: absolute;
+            bottom: 0.5rem;
+            left: 0.5rem;
+            background-color: rgba(0, 0, 0, 0.5);
+            color: #fff;
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.5rem;
+            font-size: 0.875rem;
+        }
+        
+        #hang-up-btn {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            z-index: 20;
+            background-color: #ef4444;
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 9999px;
+            font-weight: bold;
+            transition-property: all;
+            transition-duration: 150ms;
+        }
+        #hang-up-btn:hover {
+            background-color: #dc2626;
+            transform: scale(1.05);
+        }
+    </style>
+</head>
+<body class="bg-[#1a1a1a] text-[#f0f0f0] flex items-center justify-center min-h-screen p-4">
+    <div id="nickname-overlay" class="settings-dialog-overlay hidden"></div>
+    <div id="nickname-dialog" class="modal-container hidden w-full max-w-md">
+        <h2 class="text-2xl font-bold mb-4 text-[#a200ff]">Bem-vindo ao BroCall!</h2>
+        <p class="text-[#ccc] mb-4 text-center">Escolha seu nickname para começar:</p>
+        <input type="text" id="nickname-input" placeholder="Digite seu nickname" class="w-full px-5 py-3 rounded-lg bg-[#333] text-[#f0f0f0] border-2 border-[#a200ff] focus:outline-none focus:ring-2 focus:ring-[#9900ff]">
+        <button id="save-nickname-btn" class="w-full px-5 py-3 mt-4 rounded-lg bg-[#a200ff] text-white font-bold text-lg shadow-md hover:bg-[#9900ff] transition-colors">Entrar</button>
+    </div>
+
+    <div id="start-screen" class="hidden flex-col items-center justify-center w-full max-w-md p-8 bg-[#0d0d0d] rounded-2xl shadow-xl space-y-6 border border-[#333]">
+        <h1 class="text-4xl font-bold text-[#a200ff] text-shadow-md">BroCall</h1>
+        <div class="w-full flex flex-col space-y-4">
+            <button id="create-room-btn" class="w-full px-5 py-3 rounded-lg bg-[#a200ff] text-white font-bold text-lg shadow-md hover:bg-[#9900ff] transition-colors">Criar Sala</button>
+            <button id="join-room-btn" class="w-full px-5 py-3 rounded-lg bg-[#a200ff] text-white font-bold text-lg shadow-md hover:bg-[#9900ff] transition-colors">Entrar em uma Sala</button>
+        </div>
+    </div>
+
+    <div id="meeting-screen" class="hidden w-full h-full max-w-6xl flex flex-col items-center justify-between p-4 space-y-4">
+        <button id="hang-up-btn" class="hidden">Sair</button>
+
+        <div id="video-grid" class="w-full flex-grow grid grid-cols-1 md:grid-cols-2 gap-4 p-4">
+            <div id="local-video-container" class="video-container relative w-full h-[400px]">
+                <video id="local-video" class="video-element" autoplay playsinline muted></video>
+                <div id="local-video-placeholder" class="placeholder-text hidden">Câmera Desligada</div>
+                <span id="local-video-label" class="video-label">Você</span>
+            </div>
+        </div>
+        
+        <div id="audio-participants" class="hidden w-full max-w-2xl bg-[#0d0d0d] rounded-2xl p-4 border border-[#333]">
+            <h2 class="text-xl font-bold text-[#a200ff] mb-2">Participantes</h2>
+            <ul id="audio-participants-list" class="list-disc list-inside space-y-1"></ul>
+        </div>
+        
+        <div id="screen-share-modal" class="screen-share-modal hidden">
+            <div class="screen-share-modal-content">
+                 <video id="screen-share-video" class="video-element" autoplay playsinline></video>
+                 <span id="screen-share-label" class="video-label"></span>
+            </div>
+        </div>
+
+        <div id="controls" class="w-full flex justify-center items-center p-4 bg-[#0d0d0d] rounded-2xl shadow-xl space-x-4 border border-[#333]">
+            <button id="mic-btn" class="p-3 bg-[#555] text-white rounded-full transition-colors hover:bg-[#444] w-16 h-16 flex items-center justify-center">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a4 4 0 110-8 4 4 0 010 8z" />
+                </svg>
+            </button>
+            <button id="cam-btn" class="p-3 bg-[#555] text-white rounded-full transition-colors hover:bg-[#444] w-16 h-16 flex items-center justify-center">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                </svg>
+            </button>
+            <button id="screen-share-btn" class="p-3 bg-[#555] text-white rounded-full transition-colors hover:bg-[#444] w-16 h-16 flex items-center justify-center">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L14.25 17L12 14.5L9.75 17ZM12 4.5V14.5M19.5 9.75V17.25C19.5 18.3546 18.6546 19.2 17.55 19.2H6.45C5.34543 19.2 4.5 18.3546 4.5 17.25V9.75C4.5 8.64543 5.34543 7.8 6.45 7.8H12M12 7.8L12 14.5"/>
+                </svg>
+            </button>
+            <button id="settings-btn" class="p-3 bg-[#555] text-white rounded-full transition-colors hover:bg-[#444] w-16 h-16 flex items-center justify-center">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+            </button>
+        </div>
+    </div>
+    
+    <div id="create-room-type-overlay" class="settings-dialog-overlay hidden"></div>
+    <div id="create-room-type-dialog" class="modal-container hidden w-full max-w-md">
+        <h2 class="text-2xl font-bold mb-4 text-[#a200ff]">Criar Nova Sala</h2>
+        <p class="text-[#ccc] mb-4 text-center">Escolha o tipo de chamada:</p>
+        <select id="create-room-type-select" class="w-full px-5 py-3 rounded-lg bg-[#333] text-[#f0f0f0] border-2 border-[#a200ff] focus:outline-none focus:ring-2 focus:ring-[#9900ff]">
+            <option value="video">Áudio e Vídeo</option>
+            <option value="audio">Somente Áudio</option>
+        </select>
+        <button id="confirm-create-room-btn" class="w-full px-5 py-3 mt-4 rounded-lg bg-[#a200ff] text-white font-bold text-lg shadow-md hover:bg-[#9900ff] transition-colors">Criar</button>
+        <button id="cancel-create-room-btn" class="w-full px-5 py-3 mt-2 rounded-lg bg-[#555] text-white font-bold text-lg shadow-md hover:bg-[#444] transition-colors">Cancelar</button>
+    </div>
+
+    <div id="join-room-overlay" class="settings-dialog-overlay hidden"></div>
+    <div id="join-room-dialog" class="modal-container hidden w-full max-w-md">
+        <h2 class="text-2xl font-bold mb-4 text-[#a200ff]">Entrar em uma Sala</h2>
+        <p class="text-[#ccc] mb-4 text-center">Digite o código da sala:</p>
+        <input type="text" id="join-room-code-input" placeholder="Código da sala" class="w-full px-5 py-3 rounded-lg bg-[#333] text-[#f0f0f0] border-2 border-[#a200ff] focus:outline-none focus:ring-2 focus:ring-[#9900ff]">
+        <button id="confirm-join-room-btn" class="w-full px-5 py-3 mt-4 rounded-lg bg-[#a200ff] text-white font-bold text-lg shadow-md hover:bg-[#9900ff] transition-colors">Entrar</button>
+        <button id="cancel-join-room-btn" class="w-full px-5 py-3 mt-2 rounded-lg bg-[#555] text-white font-bold text-lg shadow-md hover:bg-[#444] transition-colors">Cancelar</button>
+    </div>
+
+    <div id="settings-overlay" class="settings-dialog-overlay hidden"></div>
+    <div id="settings-dialog" class="modal-container hidden w-full max-w-md">
+        <h2 class="text-xl font-bold mb-4 text-[#a200ff]">Configurações de Mídia</h2>
+        <div class="mb-4 w-full">
+            <label for="mic-select" class="block text-[#ccc] mb-1">Microfone:</label>
+            <select id="mic-select" class="w-full px-3 py-2 rounded-md bg-[#333] text-[#f0f0f0] border border-[#a200ff]"></select>
+        </div>
+        <div class="mb-4 w-full">
+            <label for="cam-select" class="block text-[#ccc] mb-1">Câmera:</label>
+            <select id="cam-select" class="w-full px-3 py-2 rounded-md bg-[#333] text-[#f0f0f0] border border-[#a200ff]"></select>
+        </div>
+        <button id="save-settings-btn" class="w-full px-5 py-2 mt-2 rounded-lg bg-[#a200ff] text-white font-bold hover:bg-[#9900ff]">Salvar</button>
+        <button id="close-settings-btn" class="w-full px-5 py-2 mt-2 rounded-lg bg-[#555] text-white font-bold hover:bg-[#444]">Fechar</button>
+    </div>
+
+    <div id="room-code-overlay" class="settings-dialog-overlay hidden"></div>
+    <div id="room-code-dialog" class="modal-container hidden w-full max-w-md">
+        <h2 class="text-xl font-bold mb-4 text-[#a200ff]">Sua sala foi criada!</h2>
+        <p class="text-[#ccc] mb-4 text-center">Compartilhe este código:</p>
+        <div class="flex items-center space-x-2 w-full">
+            <input type="text" id="generated-room-code" class="flex-grow px-3 py-2 rounded-md bg-[#333] text-[#f0f0f0] border border-[#a200ff]" readonly>
+            <button id="copy-code-btn" class="px-4 py-2 rounded-md bg-[#a200ff] text-white hover:bg-[#9900ff]">Copiar</button>
+        </div>
+        <button id="close-room-code-btn" class="w-full px-5 py-2 mt-4 rounded-lg bg-[#555] text-white font-bold hover:bg-[#444]">Fechar</button>
+    </div>
+
+    <script>
+        const host = 'ws://127.0.0.1:1080';
+        let ws;
+        let localStream;
+        let myId = null;
+        let myNickname = null;
+        let peerConnections = {};
+        let remotePeersData = {};
+        let screenShareStream = null;
+        let currentRoomType = 'video'; 
+
+        const nicknameDialog = document.getElementById('nickname-dialog');
+        const nicknameOverlay = document.getElementById('nickname-overlay');
+        const nicknameInput = document.getElementById('nickname-input');
+        const saveNicknameBtn = document.getElementById('save-nickname-btn');
+
+        const startScreen = document.getElementById('start-screen');
+        const meetingScreen = document.getElementById('meeting-screen');
+        const createRoomBtn = document.getElementById('create-room-btn');
+        const joinRoomBtn = document.getElementById('join-room-btn');
+
+        const createRoomTypeDialog = document.getElementById('create-room-type-dialog');
+        const createRoomTypeOverlay = document.getElementById('create-room-type-overlay');
+        const createRoomTypeSelect = document.getElementById('create-room-type-select');
+        const confirmCreateRoomBtn = document.getElementById('confirm-create-room-btn');
+        const cancelCreateRoomBtn = document.getElementById('cancel-create-room-btn');
+
+        const joinRoomDialog = document.getElementById('join-room-dialog');
+        const joinRoomOverlay = document.getElementById('join-room-overlay');
+        const joinRoomCodeInput = document.getElementById('join-room-code-input');
+        const confirmJoinRoomBtn = document.getElementById('confirm-join-room-btn');
+        const cancelJoinRoomBtn = document.getElementById('cancel-join-room-btn');
+
+        const localVideoLabel = document.getElementById('local-video-label');
+        const localVideoPlaceholder = document.getElementById('local-video-placeholder');
+        const localVideo = document.getElementById('local-video');
+        const localVideoContainer = document.getElementById('local-video-container');
+        const videoGrid = document.getElementById('video-grid');
+        
+        const audioParticipants = document.getElementById('audio-participants');
+        const audioParticipantsList = document.getElementById('audio-participants-list');
+        
+        const screenShareModal = document.getElementById('screen-share-modal');
+        const screenShareVideo = document.getElementById('screen-share-video');
+        const screenShareLabel = document.getElementById('screen-share-label');
+
+        const micBtn = document.getElementById('mic-btn');
+        const camBtn = document.getElementById('cam-btn');
+        const screenShareBtn = document.getElementById('screen-share-btn');
+        const settingsBtn = document.getElementById('settings-btn');
+        const hangUpBtn = document.getElementById('hang-up-btn');
+        
+        const settingsDialog = document.getElementById('settings-dialog');
+        const settingsOverlay = document.getElementById('settings-overlay');
+        const micSelect = document.getElementById('mic-select');
+        const camSelect = document.getElementById('cam-select');
+        const saveSettingsBtn = document.getElementById('save-settings-btn');
+        const closeSettingsBtn = document.getElementById('close-settings-btn');
+
+        const roomCodeDialog = document.getElementById('room-code-dialog');
+        const roomCodeOverlay = document.getElementById('room-code-overlay');
+        const generatedRoomCodeInput = document.getElementById('generated-room-code');
+        const copyCodeBtn = document.getElementById('copy-code-btn');
+        const closeRoomCodeBtn = document.getElementById('close-room-code-btn');
+
+        const iceServers = {
+            'iceServers': [
+                { 'urls': 'stun:stun.l.google.com:19302' },
+            ]
+        };
+        
+        window.onload = () => {
+            const savedNickname = localStorage.getItem('brocall_nickname');
+            if (savedNickname) {
+                myNickname = savedNickname;
+                localVideoLabel.textContent = myNickname;
+                nicknameInput.value = myNickname;
+                startScreen.classList.remove('hidden');
+            } else {
+                nicknameDialog.classList.remove('hidden');
+                nicknameOverlay.classList.remove('hidden');
+                nicknameInput.focus();
+            }
+        };
+        
+        function hangUp() {
+            if (ws) {
+                ws.close();
+            }
+            if (localStream) {
+                localStream.getTracks().forEach(track => track.stop());
+                localStream = null;
+            }
+            if (screenShareStream) {
+                stopScreenShare();
+            }
+            Object.values(peerConnections).forEach(pc => pc.close());
+            peerConnections = {};
+            remotePeersData = {};
+            
+            videoGrid.innerHTML = '';
+            videoGrid.appendChild(localVideoContainer);
+            localVideoContainer.classList.remove('hidden');
+
+            startScreen.classList.remove('hidden');
+            meetingScreen.classList.add('hidden');
+            hangUpBtn.classList.add('hidden');
+            audioParticipants.classList.add('hidden');
+            screenShareModal.classList.add('hidden');
+        }
+
+        function connectToServer() {
+            return new Promise((resolve, reject) => {
+                ws = new WebSocket(host);
+                ws.onopen = () => {
+                    console.log("Conectado ao servidor.");
+                    resolve();
+                };
+                ws.onmessage = (event) => handleServerMessage(event.data);
+                ws.onerror = (error) => {
+                    console.error("Erro no WebSocket:", error);
+                    reject(error);
+                };
+                ws.onclose = () => {
+                    console.log("Desconectado do servidor.");
+                };
+            });
+        }
+        
+        async function handleServerMessage(message) {
+            const data = JSON.parse(message);
+            console.log("Mensagem do servidor:", data);
+
+            switch (data.type) {
+                case 'room_created':
+                    myId = data.clientId;
+                    generatedRoomCodeInput.value = data.roomId;
+                    roomCodeDialog.classList.remove('hidden');
+                    roomCodeOverlay.classList.remove('hidden');
+                    enterMeetingView();
+                    await startLocalStream(currentRoomType);
+                    break;
+                case 'join_success':
+                    myId = data.clientId;
+                    currentRoomType = data.roomType; 
+                    await startLocalStream(currentRoomType);
+                    const existingPeers = data.peers;
+                    for (const peerId in existingPeers) {
+                        remotePeersData[peerId] = { nickname: existingPeers[peerId].nickname };
+                        createOffer(peerId);
+                    }
+                    enterMeetingView();
+                    break;
+                case 'join_error':
+                    alert(data.message);
+                    break;
+                case 'offer':
+                    remotePeersData[data.senderId] = { nickname: data.nickname };
+                    await handleOffer(data.senderId, data.offer);
+                    break;
+                case 'answer':
+                    remotePeersData[data.senderId] = { nickname: data.nickname };
+                    await handleAnswer(data.senderId, data.answer);
+                    break;
+                case 'ice_candidate':
+                    await handleIceCandidate(data.senderId, data.candidate);
+                    break;
+                case 'new_peer':
+                    remotePeersData[data.newPeerId] = { nickname: data.nickname };
+                    createOffer(data.newPeerId);
+                    break;
+                case 'peer_disconnected':
+                    removeRemoteVideo(data.peerId);
+                    removeScreenShareVideo(data.peerId);
+                    delete remotePeersData[data.peerId];
+                    break;
+                case 'toggle_video':
+                    toggleRemoteVideoState(data.senderId, data.camEnabled);
+                    break;
+                case 'toggle_audio':
+                    console.log(`Colega ${data.nickname} (${data.senderId}) mudou o estado do áudio para ${data.micEnabled}.`);
+                    break;
+            }
+            updateParticipantList();
+        }
+        
+        function updateParticipantList() {
+            audioParticipantsList.innerHTML = '';
+            let li = document.createElement('li');
+            li.textContent = `${myNickname} (Você)`;
+            audioParticipantsList.appendChild(li);
+
+            for (const peerId in remotePeersData) {
+                let li = document.createElement('li');
+                li.textContent = remotePeersData[peerId].nickname;
+                audioParticipantsList.appendChild(li);
+            }
+        }
+        
+        function enterMeetingView() {
+            startScreen.classList.add('hidden');
+            meetingScreen.classList.remove('hidden');
+            hangUpBtn.classList.remove('hidden');
+            
+            if (currentRoomType === 'audio') {
+                videoGrid.classList.add('hidden');
+                audioParticipants.classList.remove('hidden');
+            } else {
+                videoGrid.classList.remove('hidden');
+                audioParticipants.classList.add('hidden');
+            }
+
+            localVideoLabel.textContent = myNickname;
+            setMicState(false);
+            setCamState(false);
+        }
+
+        async function startLocalStream(roomType) {
+            try {
+                if (localStream) {
+                    stopLocalStream();
+                }
+                const audioDeviceId = micSelect.value;
+                const videoDeviceId = camSelect.value;
+                
+                const constraints = {
+                    audio: { deviceId: audioDeviceId ? { exact: audioDeviceId } : undefined },
+                    video: roomType === 'video' ? { deviceId: videoDeviceId ? { exact: videoDeviceId } : undefined } : false
+                };
+                
+                currentRoomType = roomType;
+
+                localStream = await navigator.mediaDevices.getUserMedia(constraints);
+                
+                if (roomType === 'video') {
+                    localVideo.srcObject = localStream;
+                    localVideoContainer.classList.remove('hidden');
+                    setCamState(true);
+                } else {
+                    localVideo.srcObject = null;
+                    localVideoContainer.classList.add('hidden');
+                    setCamState(false);
+                }
+                
+                setMicState(true);
+
+                Object.values(peerConnections).forEach(pc => {
+                    localStream.getTracks().forEach(track => {
+                        if (!pc.getSenders().some(sender => sender.track === track)) {
+                            pc.addTrack(track, localStream);
+                        }
+                    });
+                });
+                
+            } catch (err) {
+                console.error("Erro ao obter stream local: ", err);
+                alert("Erro ao acessar câmera ou microfone. Verifique as permissões ou selecione a opção 'Somente Áudio'.");
+                setMicState(false);
+                setCamState(false);
+                throw err;
+            }
+        }
+        
+        async function startScreenShare() {
+            if (screenShareStream) {
+                stopScreenShare();
+                return;
+            }
+
+            try {
+                screenShareStream = await navigator.mediaDevices.getDisplayMedia({
+                    video: true,
+                    audio: false
+                });
+                
+                Object.values(peerConnections).forEach(pc => {
+                    const screenTrack = screenShareStream.getVideoTracks()[0];
+                    pc.addTrack(screenTrack, screenShareStream);
+                });
+
+                screenShareBtn.classList.add('button-active');
+                
+                screenShareStream.getVideoTracks()[0].onended = () => {
+                    stopScreenShare();
+                };
+
+                if (currentRoomType === 'audio') {
+                    addScreenShareModal(myId, screenShareStream);
+                } else {
+                    addScreenShareVideo(myId, screenShareStream);
+                }
+                
+            } catch (err) {
+                console.error("Erro ao compartilhar a tela: ", err);
+                alert("Erro ao tentar compartilhar a tela.");
+            }
+        }
+        
+        function stopScreenShare() {
+            if (screenShareStream) {
+                screenShareStream.getTracks().forEach(track => track.stop());
+                screenShareStream = null;
+            }
+            
+            Object.values(peerConnections).forEach(pc => {
+                 const senders = pc.getSenders().filter(s => s.track && s.track.getSettings().displaySurface);
+                 senders.forEach(s => pc.removeTrack(s));
+            });
+
+            screenShareBtn.classList.remove('button-active');
+            
+            removeScreenShareVideo(myId);
+            
+            if (currentRoomType === 'audio') {
+                 screenShareModal.classList.add('hidden');
+            }
+        }
+
+        function stopLocalStream() {
+            if (localStream) {
+                localStream.getTracks().forEach(track => track.stop());
+                localStream = null;
+            }
+            localVideo.srcObject = null;
+            localVideoPlaceholder.classList.remove('hidden');
+            localVideo.classList.add('hidden');
+            setCamState(false);
+        }
+
+        function createPeerConnection(peerId) {
+            const pc = new RTCPeerConnection(iceServers);
+
+            pc.onicecandidate = (event) => {
+                if (event.candidate) {
+                    ws.send(JSON.stringify({
+                        type: 'ice_candidate',
+                        targetId: peerId,
+                        candidate: event.candidate,
+                        nickname: myNickname,
+                    }));
+                }
+            };
+            
+            pc.ontrack = (event) => {
+                const [stream] = event.streams;
+                const videoTrack = stream.getVideoTracks()[0];
+                
+                if (videoTrack && videoTrack.getSettings() && videoTrack.getSettings().displaySurface) {
+                     if (currentRoomType === 'audio') {
+                        addScreenShareModal(peerId, stream);
+                     } else {
+                        addScreenShareVideo(peerId, stream);
+                     }
+                } else {
+                    addRemoteVideo(peerId, stream);
+                }
+                
+                stream.getVideoTracks().forEach(track => {
+                    track.onended = () => {
+                        removeRemoteVideo(peerId);
+                        removeScreenShareVideo(peerId);
+                        screenShareModal.classList.add('hidden');
+                    };
+                    track.onmute = () => {
+                         if(track.getSettings().displaySurface) {
+                            removeScreenShareVideo(peerId);
+                            screenShareModal.classList.add('hidden');
+                         } else {
+                            toggleRemoteVideoState(peerId, false);
+                         }
+                    };
+                    track.onunmute = () => {
+                         if(!track.getSettings().displaySurface) {
+                             toggleRemoteVideoState(peerId, true);
+                         }
+                    };
+                });
+            };
+
+            pc.oniceconnectionstatechange = () => {
+                if (pc.iceConnectionState === 'disconnected' || pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'closed') {
+                    console.log(`Colega ${peerId} desconectado.`);
+                    removeRemoteVideo(peerId);
+                    removeScreenShareVideo(peerId);
+                }
+            };
+
+            if (localStream) {
+                localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+            }
+            peerConnections[peerId] = pc;
+            return pc;
+        }
+
+        async function createOffer(peerId) {
+            const pc = createPeerConnection(peerId);
+            const offer = await pc.createOffer();
+            await pc.setLocalDescription(offer);
+            ws.send(JSON.stringify({
+                type: 'offer',
+                targetId: peerId,
+                offer: pc.localDescription,
+                nickname: myNickname,
+            }));
+        }
+
+        async function handleOffer(peerId, offer) {
+            const pc = createPeerConnection(peerId);
+            await pc.setRemoteDescription(new RTCSessionDescription(offer));
+            const answer = await pc.createAnswer();
+            await pc.setLocalDescription(answer);
+            ws.send(JSON.stringify({
+                type: 'answer',
+                targetId: peerId,
+                answer: pc.localDescription,
+                nickname: myNickname,
+            }));
+        }
+
+        async function handleAnswer(peerId, answer) {
+            const pc = peerConnections[peerId];
+            if (pc) {
+                await pc.setRemoteDescription(new RTCSessionDescription(answer));
+            }
+        }
+
+        async function handleIceCandidate(peerId, candidate) {
+            const pc = peerConnections[peerId];
+            if (pc) {
+                await pc.addIceCandidate(new RTCIceCandidate(candidate));
+            }
+        }
+
+        function addRemoteVideo(peerId, stream) {
+            const id = `video-container-${peerId}`;
+            const labelText = remotePeersData[peerId] ? remotePeersData[peerId].nickname : 'Colega';
+
+            const existingContainer = document.getElementById(id);
+            if (existingContainer) {
+                const videoElement = existingContainer.querySelector('video');
+                videoElement.srcObject = stream;
+                return;
+            }
+            
+            removeScreenShareVideo(peerId);
+
+            const container = document.createElement('div');
+            container.id = id;
+            container.className = 'video-container relative w-full h-[400px]';
+
+            const video = document.createElement('video');
+            video.className = 'video-element';
+            video.autoplay = true;
+            video.playsinline = true;
+            video.srcObject = stream;
+
+            const placeholder = document.createElement('div');
+            placeholder.className = 'placeholder-text';
+            placeholder.textContent = 'Câmera Desligada';
+            
+            const label = document.createElement('span');
+            label.className = 'video-label';
+            label.textContent = labelText;
+
+            container.appendChild(video);
+            container.appendChild(placeholder);
+            container.appendChild(label);
+            videoGrid.appendChild(container);
+            
+            if (stream.getVideoTracks().length > 0 && stream.getVideoTracks()[0].enabled) {
+                video.classList.remove('hidden');
+                placeholder.classList.add('hidden');
+            } else {
+                video.classList.add('hidden');
+                placeholder.classList.remove('hidden');
+            }
+        }
+        
+        function addScreenShareVideo(peerId, stream) {
+            const id = `screen-share-container-${peerId}`;
+            const labelText = remotePeersData[peerId] ? `${remotePeersData[peerId].nickname} (Tela)` : 'Tela Compartilhada';
+
+            const existingContainer = document.getElementById(id);
+            if (existingContainer) {
+                const videoElement = existingContainer.querySelector('video');
+                videoElement.srcObject = stream;
+                return;
+            }
+            
+            removeRemoteVideo(peerId);
+
+            const container = document.createElement('div');
+            container.id = id;
+            container.className = 'screen-share-container relative w-full h-[400px]'; // Removido col-span-full
+
+            const video = document.createElement('video');
+            video.className = 'video-element';
+            video.autoplay = true;
+            video.playsinline = true;
+            video.srcObject = stream;
+            
+            const label = document.createElement('span');
+            label.className = 'video-label';
+            label.textContent = labelText;
+
+            container.appendChild(video);
+            container.appendChild(label);
+            videoGrid.appendChild(container);
+        }
+
+        function addScreenShareModal(peerId, stream) {
+            if (screenShareModal.classList.contains('hidden')) {
+                 screenShareModal.classList.remove('hidden');
+            }
+            screenShareVideo.srcObject = stream;
+            screenShareLabel.textContent = remotePeersData[peerId] ? `${remotePeersData[peerId].nickname} (Tela)` : 'Tela Compartilhada';
+        }
+
+        function removeRemoteVideo(peerId) {
+            const container = document.getElementById(`video-container-${peerId}`);
+            if (container) {
+                container.remove();
+            }
+        }
+        
+        function removeScreenShareVideo(peerId) {
+            const container = document.getElementById(`screen-share-container-${peerId}`);
+            if (container) {
+                container.remove();
+            }
+            if (screenShareModal.classList.contains('hidden') === false) {
+                 screenShareModal.classList.add('hidden');
+            }
+        }
+
+        function toggleRemoteVideoState(peerId, isEnabled) {
+            const container = document.getElementById(`video-container-${peerId}`);
+            if (container) {
+                const videoElement = container.querySelector('video');
+                const placeholderElement = container.querySelector('.placeholder-text');
+                if (isEnabled) {
+                    videoElement.classList.remove('hidden');
+                    placeholderElement.classList.add('hidden');
+                } else {
+                    videoElement.classList.add('hidden');
+                    placeholderElement.classList.remove('hidden');
+                }
+            }
+        }
+
+        function setMicState(enabled) {
+            const micTrack = localStream ? localStream.getAudioTracks()[0] : null;
+            if (micTrack) {
+                micTrack.enabled = enabled;
+            }
+            if (enabled) {
+                micBtn.classList.remove('bg-[#555]');
+                micBtn.classList.add('button-active');
+            } else {
+                micBtn.classList.remove('button-active');
+                micBtn.classList.add('bg-[#555]');
+            }
+            if (ws && myId) {
+                Object.keys(peerConnections).forEach(peerId => {
+                    ws.send(JSON.stringify({
+                        type: 'toggle_audio',
+                        targetId: peerId,
+                        micEnabled: enabled,
+                        senderId: myId,
+                        nickname: myNickname
+                    }));
+                });
+            }
+        }
+        
+        function setCamState(enabled) {
+            const camTrack = localStream ? localStream.getVideoTracks()[0] : null;
+            if (camTrack) {
+                camTrack.enabled = enabled;
+            }
+            if (enabled) {
+                localVideoPlaceholder.classList.add('hidden');
+                localVideo.classList.remove('hidden');
+                camBtn.classList.remove('bg-[#555]');
+                camBtn.classList.add('button-active');
+            } else {
+                localVideoPlaceholder.classList.remove('hidden');
+                localVideo.classList.add('hidden');
+                camBtn.classList.remove('button-active');
+                camBtn.classList.add('bg-[#555]');
+            }
+            if (ws && myId) {
+                Object.keys(peerConnections).forEach(peerId => {
+                    ws.send(JSON.stringify({
+                        type: 'toggle_video',
+                        targetId: peerId,
+                        camEnabled: enabled,
+                        senderId: myId,
+                        nickname: myNickname
+                    }));
+                });
+            }
+        }
+
+        micBtn.addEventListener('click', () => {
+            if (localStream) {
+                const micTrack = localStream.getAudioTracks()[0];
+                if (micTrack) {
+                    setMicState(!micTrack.enabled);
+                }
+            }
+        });
+
+        camBtn.addEventListener('click', () => {
+            if (localStream && localStream.getVideoTracks().length > 0) {
+                const camTrack = localStream.getVideoTracks()[0];
+                setCamState(!camTrack.enabled);
+            }
+        });
+        
+        screenShareBtn.addEventListener('click', () => {
+            if (screenShareStream) {
+                stopScreenShare();
+            } else {
+                startScreenShare();
+            }
+        });
+
+        hangUpBtn.addEventListener('click', hangUp);
+
+        saveNicknameBtn.addEventListener('click', () => {
+            myNickname = nicknameInput.value.trim();
+            if (myNickname) {
+                localStorage.setItem('brocall_nickname', myNickname);
+                nicknameDialog.classList.add('hidden');
+                nicknameOverlay.classList.add('hidden');
+                startScreen.classList.remove('hidden');
+                localVideoLabel.textContent = myNickname;
+            } else {
+                alert("Por favor, digite seu nickname.");
+            }
+        });
+
+        createRoomBtn.addEventListener('click', () => {
+            createRoomTypeDialog.classList.remove('hidden');
+            createRoomTypeOverlay.classList.remove('hidden');
+        });
+        
+        joinRoomBtn.addEventListener('click', () => {
+            joinRoomDialog.classList.remove('hidden');
+            joinRoomOverlay.classList.remove('hidden');
+            joinRoomCodeInput.focus();
+        });
+
+        confirmCreateRoomBtn.addEventListener('click', async () => {
+            currentRoomType = createRoomTypeSelect.value;
+            createRoomTypeDialog.classList.add('hidden');
+            createRoomTypeOverlay.classList.add('hidden');
+            await connectToServer();
+            ws.send(JSON.stringify({ type: 'create_room', nickname: myNickname, roomType: currentRoomType }));
+        });
+        
+        cancelCreateRoomBtn.addEventListener('click', () => {
+            createRoomTypeDialog.classList.add('hidden');
+            createRoomTypeOverlay.classList.add('hidden');
+        });
+        
+        confirmJoinRoomBtn.addEventListener('click', async () => {
+            const roomCode = joinRoomCodeInput.value.trim();
+            if (roomCode) {
+                joinRoomDialog.classList.add('hidden');
+                joinRoomOverlay.classList.add('hidden');
+                await connectToServer();
+                ws.send(JSON.stringify({ type: 'join_room', roomId: roomCode, nickname: myNickname }));
+            } else {
+                alert("Por favor, digite um código de sala.");
+            }
+        });
+
+        cancelJoinRoomBtn.addEventListener('click', () => {
+            joinRoomDialog.classList.add('hidden');
+            joinRoomOverlay.classList.add('hidden');
+        });
+
+        settingsBtn.addEventListener('click', async () => {
+            await populateDeviceLists();
+            settingsDialog.classList.remove('hidden');
+            settingsOverlay.classList.remove('hidden');
+        });
+
+        saveSettingsBtn.addEventListener('click', async () => {
+            if (localStream) {
+                stopLocalStream();
+                await startLocalStream(currentRoomType);
+            }
+            settingsDialog.classList.add('hidden');
+            settingsOverlay.classList.add('hidden');
+        });
+
+        closeSettingsBtn.addEventListener('click', () => {
+            settingsDialog.classList.add('hidden');
+            settingsOverlay.classList.add('hidden');
+        });
+        
+        async function populateDeviceLists() {
+            try {
+                await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                micSelect.innerHTML = '';
+                camSelect.innerHTML = '';
+                
+                devices.forEach(device => {
+                    const option = document.createElement('option');
+                    option.value = device.deviceId;
+                    option.text = device.label || `Dispositivo ${device.kind}`;
+                    
+                    if (device.kind === 'audioinput') {
+                        micSelect.appendChild(option);
+                    } else if (device.kind === 'videoinput') {
+                        camSelect.appendChild(option);
+                    }
+                });
+            } catch (err) {
+                console.error("Erro ao listar dispositivos: ", err);
+                alert("Para acessar as configurações, é necessário permitir o acesso à câmera e microfone.");
+            }
+        }
+        
+        copyCodeBtn.addEventListener('click', () => {
+            generatedRoomCodeInput.select();
+            document.execCommand('copy');
+            alert("Código copiado para a área de transferência!");
+        });
+
+        closeRoomCodeBtn.addEventListener('click', () => {
+            roomCodeDialog.classList.add('hidden');
+            roomCodeOverlay.classList.add('hidden');
+        });
+
+        document.addEventListener('DOMContentLoaded', () => {
+             localVideoLabel.textContent = 'Você';
+        });
+    </script>
+</body>
+</html>
